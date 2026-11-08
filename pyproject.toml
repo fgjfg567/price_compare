@@ -1,0 +1,22 @@
+[project]
+name = "price-compare"
+version = "1.0.0"
+description = "مقارنة أسعار التوصيل السريع"
+requires-python = ">=3.10"
+dependencies = [
+  "flet==0.28.3",
+  "requests",
+  "beautifulsoup4",
+]
+
+[tool.flet]
+org = "com.pricecompare"
+product = "Price Compare"
+company = "PriceCompare"
+copyright = ""
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.android.permission]
+"android.permission.INTERNET" = true
