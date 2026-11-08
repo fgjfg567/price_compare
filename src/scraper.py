@@ -23,7 +23,9 @@ _AR = str.maketrans("٠١٢٣٤٥٦٧٨٩٫٬", "0123456789.,")
 
 
 class ScrapeError(Exception):
-    pass
+    def __init__(self, msg, code="error"):
+        super().__init__(msg)
+        self.code = code   # robots | blocked | http | network | browser | noitems | error
 
 
 # ---------------------------------------------------------------- الجلب
@@ -56,9 +58,9 @@ def _allowed_by_robots(url):
 def _fetch_http(url):
     r = requests.get(url, headers=HEADERS, timeout=25)
     if r.status_code in (401, 403, 429, 503):
-        raise ScrapeError(f"الموقع رفض الطلب (HTTP {r.status_code}). جرّب وضع «المتصفح» أو قد يكون الموقع يحجب الطلبات الآلية.")
+        raise ScrapeError(f"الموقع رفض الطلب (HTTP {r.status_code}) — يحجب الطلبات الآلية.", "blocked")
     if r.status_code >= 400:
-        raise ScrapeError(f"خطأ من الموقع (HTTP {r.status_code}). تأكد من صحة رابط البحث.")
+        raise ScrapeError(f"خطأ من الموقع (HTTP {r.status_code}).", "http")
     r.encoding = r.encoding if r.encoding and r.encoding.lower() != "iso-8859-1" else "utf-8"
     return r.text
 
@@ -88,12 +90,12 @@ def _fetch_browser(url):
 
 def fetch_html(url, mode="http"):
     if not _allowed_by_robots(url):
-        raise ScrapeError("ملف robots.txt للموقع يمنع الوصول الآلي إلى صفحة البحث، لذلك لن أجلبها.")
+        raise ScrapeError("الموقع يمنع الوصول الآلي لصفحة البحث (robots.txt).", "robots")
     _throttle(urlparse(url).netloc)
     try:
         return _fetch_browser(url) if mode == "browser" else _fetch_http(url)
     except requests.RequestException as e:
-        raise ScrapeError(f"تعذّر الاتصال بالموقع: {e.__class__.__name__}")
+        raise ScrapeError("تعذّر الاتصال بالموقع (تحقق من الإنترنت).", "network")
 
 
 # ---------------------------------------------------------------- مساعدات
