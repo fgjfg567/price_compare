@@ -1,0 +1,28 @@
+name: Build Android APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install Flet
+        run: pip install "flet[all]==0.28.3"
+      - name: Build APK
+        shell: bash {0}          # بدون pipefail كي يعمل "yes |" بشكل صحيح
+        run: yes | flet build apk --verbose
+      - uses: actions/upload-artifact@v4
+        with:
+          name: price-compare-apk
+          path: build/apk
+          if-no-files-found: error

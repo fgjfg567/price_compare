@@ -1,7 +1,5 @@
-# مقارنة الأسعار — النسخة 2
-## التحديث على GitHub (بعد أن رفعت النسخة الأولى)
-1. في المستودع افتح المجلد src ← Add file ← Upload files ← ارفع من مجلد src الجديد الملفات:
-   main.py  stores.py  textutil.py  scraper.py  units.py   (اختر استبدال الملفات القديمة)
-2. ارفع pyproject.toml من المجلد الرئيسي كذلك.
-3. احذف من src الملفات القديمة: database.py  providers.py  logic.py  (افتح الملف ← أيقونة سلة المهملات ← Commit).
-4. سيبدأ البناء تلقائياً (تبويب Actions)، ثم حمّل الـ APK الجديد من Artifacts.
+# مقارنة الأسعار — النسخة 3
+## التحديث على GitHub (نفس الطريقة السابقة)
+1. افتح المجلد src في مستودعك ← Add file ← Upload files ← ارفع من src الجديد:
+   main.py  stores.py  scraper.py  textutil.py  units.py   (تُستبدل القديمة)
+2. ارفع pyproject.toml أيضاً. سيبدأ البناء تلقائياً (تبويب Actions) ثم حمّل الـ APK من Artifacts.
