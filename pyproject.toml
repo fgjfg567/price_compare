@@ -1,6 +1,6 @@
 [project]
 name = "price-compare"
-version = "2.0.0"
+version = "4.0.0"
 description = "مقارنة أسعار التوصيل السريع"
 requires-python = ">=3.10"
 dependencies = [

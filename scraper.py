@@ -97,7 +97,7 @@ def check_url(url, timeout=8):
 
 
 # ---------------------------------------------------------------- الروابط
-_TRACK = re.compile(r"^(utm_|ref|pd_rd|pf_rd|qid|sr$|keywords|crid|sprefix|content-id|dib|psc|th$|spLa|sp_csd|fbclid|gclid)", re.I)
+_TRACK = re.compile(r"^(utm_|ref|pd_rd|pf_rd|qid|sr$|keywords|crid|sprefix|content-id|dib|psc|th$|spLa|sp_csd|fbclid|gclid|___)", re.I)
 _BAD_LINK = re.compile(r"(cart|checkout|login|signin|wishlist|compare|add-?to|account|help|javascript|mailto|tel:|/c/|/category|/brand)", re.I)
 
 
@@ -128,8 +128,10 @@ PRICE_RE = re.compile(
     r"|(\d+(?:\s?[.,]\s?\d{1,3})?)\s*(?:SAR|SR|ر\s?\.?\s?س\.?|ريال|﷼)", re.I)
 BARE_RE = re.compile(r"^\d{1,5}[.,]\d{1,3}$")
 _UNIT_TOKENS = {"l", "ml", "kg", "g", "gm", "pcs", "pc", "لتر", "مل", "ملل", "جم", "كجم", "غم", "حبة", "قطعة", "x"}
-_INSTALL = re.compile(r"(تقسيط|قسط|دفعات|دفعة|tamara|tabby|installments?|payments? of|شهري|/\s*month|per month|توفير|وفّر|وفر|save|شحن|shipping|ضريبة|vat)", re.I)
-_DISCOUNT = re.compile(r"(%\s*off|off\s*%|\d\s*%|خصم|تخفيض|وفر|save)", re.I)
+_AR_START = r"(?<![\u0621-\u064A])"          # بداية كلمة عربية (حتى لا تُطابَق «وفر» داخل «متوفر»)
+_INSTALL = re.compile(_AR_START + r"(?:تقسيط|قسط|دفعات|دفعة|شهري|توفير|وفّر|وفر|شحن|ضريبة)|tamara|tabby|installments?|payments? of|/\s*month|per month|\bsave\b|shipping|\bvat\b", re.I)
+_DISCOUNT = re.compile(r"%\s*off|off\s*%|\d\s*%|" + _AR_START + r"(?:خصم|تخفيض|وفر)|\bsave\b", re.I)
+_UNAVAIL = re.compile(r"(نفد|نفذ|غير متوفر|غير متاح|out of stock|sold out|currently unavailable|unavailable)", re.I)
 _STRUCK = {"old", "was", "strike", "strikethrough", "striked", "original", "before", "regular", "compare", "cross",
            "crossed", "deleted", "linethrough", "oldprice", "listprice", "wasprice", "mrp", "prev", "previous"}
 
@@ -210,18 +212,17 @@ def _bare_prices(tokens):
     return out
 
 
-def _card_price(card, bare=False):
-    """السعر الحالي كما يظهر في البطاقة: يتجاهل المشطوب وسعر الوحدة والتقسيط."""
-    tokens, all_tokens = [], []
-    for s in card.find_all(string=True):
-        if s.parent.name in ("script", "style", "noscript"):
+def _card_info(card, bare=False):
+    """السعر الحالي كما يظهر في البطاقة + السعر القديم (إن وُجد) + هل المنتج متوفر."""
+    tokens, struck, all_tokens = [], [], []
+    for node in card.find_all(string=True):
+        if node.parent.name in ("script", "style", "noscript"):
             continue
-        t = _MARKS.sub("", str(s)).replace("\xa0", " ").translate(_AR).strip()
+        t = _MARKS.sub("", str(node)).replace("\xa0", " ").translate(_AR).strip()
         if not t:
             continue
         all_tokens.append(t)
-        if not _is_struck(s, card):
-            tokens.append(t)
+        (struck if _is_struck(node, card) else tokens).append(t)
     text = " ".join(tokens)
     prices = _currency_prices(text)
     if not prices and bare:
@@ -230,9 +231,20 @@ def _card_price(card, bare=False):
         prices = _currency_prices(" ".join(all_tokens))
     if not prices:
         return None
+    cur, old = prices[0], None
     if len(prices) >= 2 and _DISCOUNT.search(text):    # سعر قديم + جديد: الحالي هو الأقل
-        return min(prices[:2])
-    return prices[0]
+        cur = min(prices[:2])
+        old = max(prices[:2]) if max(prices[:2]) > cur else None
+    if old is None:
+        sp = _currency_prices(" ".join(struck)) or (_bare_prices(struck) if bare else [])
+        if sp and max(sp) > cur:
+            old = max(sp)
+    return {"price": cur, "old": old, "available": not _UNAVAIL.search(" ".join(all_tokens))}
+
+
+def _card_price(card, bare=False):
+    info = _card_info(card, bare)
+    return info["price"] if info else None
 
 
 # ---------------------------------------------------------------- أسماء/روابط البطاقات
@@ -276,8 +288,9 @@ def _best_link(card, base):
     return best if score > -3 else ""
 
 
-def _item(name, price, url, base):
-    return {"name": re.sub(r"\s+", " ", name).strip()[:160], "price": price, "url": clean_url(url, base) if url else ""}
+def _item(name, price, url, base, old=None, available=True):
+    return {"name": re.sub(r"\s+", " ", name).strip()[:160], "price": price,
+            "url": clean_url(url, base) if url else "", "old": old, "available": available}
 
 
 def _dedup(items):
@@ -300,17 +313,41 @@ def _amazon(soup, base, **_):
             continue
         h2 = div.find("h2")
         name = (h2.get("aria-label") or h2.get_text(" ", strip=True)) if h2 else None
-        price = None
+        price = old = None
         for p in div.select("span.a-price"):
-            if "a-text-price" in (p.get("class") or []):
-                continue                                   # السعر القديم المشطوب
             off = p.select_one("span.a-offscreen")
-            txt = _MARKS.sub("", (off or p).get_text(" ", strip=True)).translate(_AR)
-            price = _to_price(txt)
-            if price:
-                break
+            val = _to_price(_MARKS.sub("", (off or p).get_text(" ", strip=True)).translate(_AR))
+            if "a-text-price" in (p.get("class") or []):
+                old = old or val                           # السعر القديم المشطوب
+            elif val and not price:
+                price = val
+        if old and price and old <= price:
+            old = None
+        avail = not _UNAVAIL.search(div.get_text(" ", strip=True))
         if name and price:
-            out.append({"name": re.sub(r"\s+", " ", name).strip()[:160], "price": price, "url": f"{origin}/dp/{asin}"})
+            out.append({"name": re.sub(r"\s+", " ", name).strip()[:160], "price": price,
+                        "url": f"{origin}/dp/{asin}", "old": old, "available": avail})
+    return out
+
+
+# ---------------------------------------------------------------- ماجنتو (العثيم وغيرها)
+def _magento(soup, base, **_):
+    out = []
+    for li in soup.select("li.product-item, div.product-item"):
+        a = li.select_one("a.product-item-link") or li.select_one(".product-item-name a")
+        if not a or not a.get("href"):
+            continue
+        fp = li.select_one('[data-price-type="finalPrice"]')
+        price = _to_price(fp.get("data-price-amount")) if fp is not None else None
+        if not price:
+            sp = li.select_one(".special-price .price, .price-box .price")
+            price = _to_price(sp.get_text(" ", strip=True)) if sp is not None else None
+        if not price:
+            continue
+        op = li.select_one('[data-price-type="oldPrice"]')
+        old = _to_price(op.get("data-price-amount")) if op is not None else None
+        out.append(_item(a.get_text(" ", strip=True), price, a["href"], base,
+                         old if old and old > price else None, not _UNAVAIL.search(li.get_text(" ", strip=True))))
     return out
 
 
@@ -336,10 +373,11 @@ def _link_cards(soup, base, product_re=None, bare=False, **_):
             continue
         seen.add(id(cur))
         name = (a.get("title") or "").strip() or _card_name(cur)
-        price = _card_price(cur, bare)
+        info = _card_info(cur, bare)
         url = clean_url(a["href"], base)
-        if name and price and url:
-            out.append({"name": re.sub(r"\s+", " ", name).strip()[:160], "price": price, "url": url})
+        if name and info and url:
+            out.append({"name": re.sub(r"\s+", " ", name).strip()[:160], "price": info["price"], "url": url,
+                        "old": info["old"], "available": info["available"]})
     return out
 
 
@@ -361,9 +399,9 @@ def _html_cards(soup, base, bare=False, **_):
                 name = _card_name(cur)
                 if name:
                     used.add(id(cur))
-                    price = _card_price(cur, bare)
-                    if price:
-                        out.append(_item(name, price, _best_link(cur, base), base))
+                    info = _card_info(cur, bare)
+                    if info:
+                        out.append(_item(name, info["price"], _best_link(cur, base), base, info["old"], info["available"]))
                     break
             cur = cur.parent
     return out
@@ -429,7 +467,7 @@ def _embedded_json(soup, base, **_):
             price = sale if sale else reg                     # السعر بعد الخصم أولاً
             if name and price:
                 url = next((o[k] for k in URL_KEYS if isinstance(o.get(k), str) and "/" in o[k]), "")
-                out.append(_item(name, price, url, base))
+                out.append(_item(name, price, url, base, reg if sale and reg and reg > sale else None))
             for v in o.values():
                 if isinstance(v, (dict, list)):
                     walk(v, depth + 1)
@@ -464,7 +502,7 @@ def extract_products(html, base_url="", relevant=None, product_re=None, bare=Fal
     """يرجع (المنتجات، اسم الطريقة). يختار الطريقة ذات أكثر نتائج مطابقة؛ وعند التعادل الأولى بالترتيب."""
     soup = BeautifulSoup(html, "html.parser")
     best, best_name, best_score = [], "none", -1
-    for name, fn in (("أمازون", _amazon), ("بطاقات المنتجات", _link_cards), ("تحليل HTML", _html_cards),
+    for name, fn in (("أمازون", _amazon), ("ماجنتو", _magento), ("بطاقات المنتجات", _link_cards), ("تحليل HTML", _html_cards),
                      ("JSON-LD", _jsonld), ("JSON مضمّن", _embedded_json)):
         try:
             items = _dedup(fn(soup, base_url, product_re=product_re, bare=bare))
