@@ -1,0 +1,35 @@
+# (اختياري) بناء حزمة AAB موقّعة لرفعها على Google Play — لم أتمكن من تجربته؛ إن فشل أرسل لي سجل الخطأ.
+# يحتاج 4 أسرار في المستودع: Settings ← Secrets and variables ← Actions:
+#   KEYSTORE_BASE64  (ملف .jks محوّل base64)  KEYSTORE_PASSWORD  KEY_ALIAS  KEY_PASSWORD
+name: Build Android AAB (Google Play)
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: pip install "flet[all]==0.28.3"
+      - name: Prepare keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/upload.jks"
+      - name: Build AAB
+        shell: bash {0}
+        run: |
+          yes | flet build aab --verbose \
+            --build-number ${{ github.run_number }} \
+            --android-signing-key-store "$RUNNER_TEMP/upload.jks" \
+            --android-signing-key-store-password "${{ secrets.KEYSTORE_PASSWORD }}" \
+            --android-signing-key-alias "${{ secrets.KEY_ALIAS }}" \
+            --android-signing-key-password "${{ secrets.KEY_PASSWORD }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shopping-assistant-aab
+          path: build/aab
+          if-no-files-found: error

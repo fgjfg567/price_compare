@@ -1,7 +1,7 @@
 [project]
-name = "price-compare"
-version = "4.0.0"
-description = "مقارنة أسعار التوصيل السريع"
+name = "shopping-assistant"
+version = "1.0.0"
+description = "Shopping assistant"
 requires-python = ">=3.10"
 dependencies = [
   "flet==0.28.3",
@@ -10,9 +10,10 @@ dependencies = [
 ]
 
 [tool.flet]
-org = "com.pricecompare"
-product = "Price Compare"
-company = "PriceCompare"
+# مهم: اسم الحزمة (org + اسم المشروع) لا يمكن تغييره بعد النشر على Google Play. غيّر org إلى اسم خاص بك الآن.
+org = "com.yourname"
+product = "Shopping Assistant"
+company = "YourName"
 copyright = ""
 
 [tool.flet.app]

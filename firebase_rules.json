@@ -1,0 +1,10 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "public": {
+      ".read": true,
+      ".write": "auth != null && auth.uid === 'ضع_هنا_UID_حساب_المشرف'"
+    }
+  }
+}

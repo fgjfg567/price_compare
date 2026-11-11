@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>لوحة التحكم</title>
+<style>
+  :root{--navy:#131921;--navy2:#232f3e;--orange:#ff9900;--yellow:#ffd814;--bg:#eaeded;--card:#fff;--text:#0f1111;--muted:#565959;--red:#cc0c39;--border:#d5d9d9}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;background:var(--bg);color:var(--text)}
+  header{background:var(--navy);color:#fff;padding:14px 16px;border-bottom:3px solid var(--orange);display:flex;justify-content:space-between;align-items:center}
+  header h1{font-size:18px;margin:0}
+  main{max-width:760px;margin:0 auto;padding:12px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px}
+  h2{font-size:16px;margin:0 0 10px}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  input,select,textarea{width:100%;padding:10px;border:1px solid #888c8c;border-radius:8px;font-size:15px;font-family:inherit;background:#fff}
+  textarea{min-height:70px}
+  .row{display:flex;gap:8px}.row>*{flex:1}
+  button{border:0;border-radius:20px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+  .primary{background:var(--yellow);color:var(--text)} .danger{background:#fde8e8;color:var(--red)} .ghost{background:#fff;border:1px solid var(--border)}
+  .tabs{display:flex;gap:6px;margin-bottom:12px;overflow:auto}
+  .tab{background:#fff;border:1px solid var(--border);padding:8px 14px;border-radius:18px;white-space:nowrap}
+  .tab.on{background:#fff3d6;border-color:var(--orange)}
+  .item{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:8px}
+  .item b{display:block}.item small{color:var(--muted);word-break:break-all}
+  .code{font-family:monospace;background:#fff8e7;border:1px dashed var(--orange);padding:2px 8px;border-radius:6px}
+  .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--navy2);color:#fff;padding:10px 18px;border-radius:20px;display:none;z-index:9}
+  .warn{background:#fff3d6;border:1px solid var(--orange);padding:10px;border-radius:8px;font-size:13px;margin-bottom:10px}
+  .timerbox{background:var(--navy2);color:#fff;border-radius:10px;padding:12px;text-align:center;margin-top:10px}
+  .timerbox .d{font-size:28px;color:var(--orange);font-weight:700}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header><h1>لوحة التحكم</h1><button class="ghost" id="logoutBtn" hidden>خروج</button></header>
+<main>
+
+<section id="login" class="card">
+  <h2>تسجيل دخول المشرف</h2>
+  <div class="warn" id="setupHint">أول مرة؟ اتبع خطوات README لإنشاء مشروع Firebase ثم الصق القيمتين التاليتين (تُحفظان في هذا المتصفح فقط).</div>
+  <label>Firebase Web API Key</label><input id="apiKey" dir="ltr" placeholder="AIza...">
+  <label>رابط قاعدة البيانات (Realtime Database URL)</label><input id="dbUrl" dir="ltr" placeholder="https://xxxx-default-rtdb.firebaseio.com">
+  <label>البريد الإلكتروني</label><input id="email" type="email" dir="ltr">
+  <label>كلمة المرور</label><input id="password" type="password" dir="ltr">
+  <p><button class="primary" id="loginBtn">دخول</button></p>
+</section>
+
+<section id="app" hidden>
+  <div class="tabs">
+    <button class="tab on" data-tab="coupons">الكوبونات</button>
+    <button class="tab" data-tab="offers">العروض</button>
+    <button class="tab" data-tab="settings">الإعدادات</button>
+  </div>
+
+  <div id="tab-coupons">
+    <div class="card">
+      <h2>مؤقت «كوبون قادم»</h2>
+      <label>نص الرسالة</label><input id="timerText" value="كوبون قادم في">
+      <div class="row">
+        <div><label>المدة</label><input id="timerNum" type="number" min="1" value="1"></div>
+        <div><label>الوحدة</label><select id="timerUnit"><option value="60000">دقيقة</option><option value="3600000" selected>ساعة</option></select></div>
+      </div>
+      <p><button class="primary" id="timerSet">تفعيل المؤقت</button> <button class="danger" id="timerDel">حذف المؤقت</button></p>
+      <div id="timerInfo"></div>
+    </div>
+    <div class="card">
+      <h2>إضافة كوبون</h2>
+      <label>اسم الكوبون / المناسبة (يكتبه المشرف فقط)</label><input id="cName" placeholder="مثال: خصم رمضان">
+      <label>نص الكوبون</label><input id="cCode" dir="ltr" placeholder="SAVE10">
+      <p><button class="primary" id="cAdd">إضافة الكوبون</button></p>
+    </div>
+    <div class="card"><h2>الكوبونات الحالية</h2><div id="cList"></div></div>
+  </div>
+
+  <div id="tab-offers" hidden>
+    <div class="card">
+      <h2>إضافة عرض</h2>
+      <label>نوع العرض</label><textarea id="oTitle" placeholder="مثال: اشترِ 1 واحصل على الثاني مجاناً"></textarea>
+      <label>رابط العرض (من أمازون)</label><input id="oUrl" dir="ltr" placeholder="https://www.amazon.sa/...">
+      <p><button class="primary" id="oAdd">إضافة العرض</button></p>
+      <small>سيُحوَّل الرابط تلقائياً داخل التطبيق إلى رابط العمولة الخاص بك.</small>
+    </div>
+    <div class="card"><h2>العروض الحالية</h2><div id="oList"></div></div>
+  </div>
+
+  <div id="tab-settings" hidden>
+    <div class="card">
+      <h2>إعدادات التطبيق</h2>
+      <div class="warn" id="tagWarn" hidden>لم تُدخل معرّف الشريك (Tag) بعد — لن تُحتسب لك عمولة حتى تضبطه.</div>
+      <label>معرّف الشريك في أمازون (Associate Tag)</label><input id="sTag" dir="ltr" placeholder="mystore-21">
+      <label><input type="checkbox" id="sPrices" style="width:auto"> عرض الأسعار في التطبيق</label>
+      <label>إعلان أعلى صفحة البحث (اتركه فارغاً لإخفائه)</label><textarea id="sAnn"></textarea>
+      <label>نص الإفصاح عن العمولة</label><textarea id="sDisc"></textarea>
+      <label>بريد/وسيلة التواصل</label><input id="sContact">
+      <label>رابط سياسة الخصوصية</label><input id="sPriv" dir="ltr" placeholder="https://...">
+      <p><button class="primary" id="sSave">حفظ الإعدادات</button></p>
+    </div>
+  </div>
+</section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const LS = window.localStorage;
+let S = {key: LS.apiKey || '', db: (LS.dbUrl || '').replace(/\/$/, ''), idToken: '', refresh: '', timerCreated: null, offset: 0};
+let timerData = null;
+
+function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',2600)}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+async function api(method, path, body){
+  const url = `${S.db}/public${path ? '/' + path : ''}.json` + (method==='GET' ? '' : `?auth=${encodeURIComponent(S.idToken)}`);
+  const r = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body: body===undefined?undefined:JSON.stringify(body)});
+  if (r.status===401 || r.status===403) throw new Error('غير مصرّح: تأكد من قواعد Firebase وأن حسابك هو المشرف.');
+  if (!r.ok) throw new Error('خطأ ' + r.status);
+  const d = r.headers.get('Date'); if (d) S.offset = new Date(d).getTime() - Date.now();
+  return r.json();
+}
+
+async function login(){
+  S.key = $('apiKey').value.trim(); S.db = $('dbUrl').value.trim().replace(/\/$/,'');
+  if(!S.key||!S.db) return toast('أدخل API Key ورابط قاعدة البيانات');
+  try{
+    const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${S.key}`,
+      {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('email').value.trim(),password:$('password').value,returnSecureToken:true})});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error?.message==='INVALID_LOGIN_CREDENTIALS'?'بيانات الدخول غير صحيحة':(d.error?.message||'فشل الدخول'));
+    S.idToken = d.idToken; S.refresh = d.refreshToken;
+    LS.apiKey = S.key; LS.dbUrl = S.db; LS.email = $('email').value.trim();
+    $('login').hidden = true; $('app').hidden = false; $('logoutBtn').hidden = false;
+    setInterval(refreshToken, 50*60*1000);
+    await loadAll();
+  }catch(e){toast(e.message)}
+}
+async function refreshToken(){
+  try{
+    const r = await fetch(`https://securetoken.googleapis.com/v1/token?key=${S.key}`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`grant_type=refresh_token&refresh_token=${encodeURIComponent(S.refresh)}`});
+    const d = await r.json(); if(d.id_token){S.idToken=d.id_token;S.refresh=d.refresh_token}
+  }catch(e){}
+}
+
+async function loadAll(){
+  const data = (await api('GET','')) || {};
+  const rows = o => Object.entries(o||{}).map(([id,v])=>({id,...v})).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  // الكوبونات
+  $('cList').innerHTML = rows(data.coupons).map(c=>`<div class="item"><div><b>${esc(c.name||'بدون اسم')}</b><span class="code">${esc(c.code)}</span></div><button class="danger" onclick="delItem('coupons','${c.id}')">حذف</button></div>`).join('') || '<small>لا توجد كوبونات.</small>';
+  // العروض
+  $('oList').innerHTML = rows(data.offers).map(o=>`<div class="item"><div><b>${esc(o.title)}</b><small>${esc(o.url)}</small></div><button class="danger" onclick="delItem('offers','${o.id}')">حذف</button></div>`).join('') || '<small>لا توجد عروض.</small>';
+  // المؤقت
+  timerData = (data.timer && data.timer.created) ? data.timer : null; renderTimer();
+  // الإعدادات
+  const c = data.config || {};
+  $('sTag').value = c.affiliate_tag||''; $('sPrices').checked = c.show_prices!==false;
+  $('sAnn').value = c.announcement||''; $('sDisc').value = c.disclosure||'';
+  $('sContact').value = c.contact||''; $('sPriv').value = c.privacy_url||'';
+  $('tagWarn').hidden = !!(c.affiliate_tag||'').trim();
+}
+
+function renderTimer(){
+  const box = $('timerInfo');
+  if(!timerData){box.innerHTML='<small>لا يوجد مؤقت فعّال.</small>';return}
+  const left = timerData.created + timerData.delay_ms - (Date.now() + S.offset);
+  if(left<=0){box.innerHTML='<small>انتهى المؤقت (لا يظهر للمستخدمين). يمكنك حذفه أو تفعيل جديد.</small>';return}
+  const s=Math.floor(left/1000), p=n=>String(n).padStart(2,'0');
+  box.innerHTML=`<div class="timerbox">${esc(timerData.text)}<div class="d">${p(Math.floor(s/3600))}:${p(Math.floor(s%3600/60))}:${p(s%60)}</div></div>`;
+}
+setInterval(renderTimer,1000);
+
+async function guard(fn){try{await fn()}catch(e){toast(e.message||'حدث خطأ')}}
+const TS = {'.sv':'timestamp'};
+
+$('timerSet').onclick = () => guard(async()=>{
+  const n = Number($('timerNum').value), unit = Number($('timerUnit').value);
+  if(!(n>0)) return toast('أدخل مدة صحيحة');
+  await api('PUT','timer',{text:$('timerText').value.trim()||'كوبون قادم في', delay_ms:n*unit, created:TS});
+  toast('تم تفعيل المؤقت'); await loadAll();
+});
+$('timerDel').onclick = () => guard(async()=>{await api('DELETE','timer'); toast('تم حذف المؤقت'); await loadAll()});
+$('cAdd').onclick = () => guard(async()=>{
+  const code=$('cCode').value.trim(), name=$('cName').value.trim();
+  if(!code) return toast('أدخل نص الكوبون');
+  await api('POST','coupons',{name,code,ts:TS}); $('cCode').value='';$('cName').value=''; toast('تمت الإضافة'); await loadAll();
+});
+$('oAdd').onclick = () => guard(async()=>{
+  const title=$('oTitle').value.trim(), url=$('oUrl').value.trim();
+  if(!title||!/^https?:\/\//i.test(url)) return toast('أدخل نوع العرض ورابطاً صحيحاً يبدأ بـ https://');
+  await api('POST','offers',{title,url,ts:TS}); $('oTitle').value='';$('oUrl').value=''; toast('تمت الإضافة'); await loadAll();
+});
+window.delItem = (kind,id) => { if(confirm('حذف هذا العنصر؟')) guard(async()=>{await api('DELETE',`${kind}/${id}`); toast('تم الحذف'); await loadAll()}) };
+$('sSave').onclick = () => guard(async()=>{
+  await api('PATCH','config',{affiliate_tag:$('sTag').value.trim(), show_prices:$('sPrices').checked, announcement:$('sAnn').value.trim(),
+    disclosure:$('sDisc').value.trim(), contact:$('sContact').value.trim(), privacy_url:$('sPriv').value.trim()});
+  toast('تم حفظ الإعدادات'); await loadAll();
+});
+
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));
+  ['coupons','offers','settings'].forEach(t=>$('tab-'+t).hidden = (t!==b.dataset.tab));
+});
+$('loginBtn').onclick = login;
+$('logoutBtn').onclick = () => location.reload();
+$('apiKey').value = LS.apiKey||''; $('dbUrl').value = LS.dbUrl||''; $('email').value = LS.email||'';
+</script>
+</body>
+</html>
